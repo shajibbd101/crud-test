@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { listUsers } from "@/lib/db";
+import { endpointInfo, listUsers } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
 
@@ -9,7 +9,7 @@ export async function GET() {
     const rows = await listUsers();
     return NextResponse.json({
       ok: true,
-      table: process.env.API_TABLE || "shajibbd",
+      ...endpointInfo(),
       rows: rows.length,
     });
   } catch (err) {

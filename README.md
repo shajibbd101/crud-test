@@ -81,6 +81,9 @@ Open http://localhost:3000
    | `API_BASE_URL`| `https://api-central_db.shajibbd.online` |
    | `API_TABLE`   | `shajibbd`                               |
 
+   > `https://` is optional — the app adds the scheme automatically if the value
+   > was saved as a bare hostname.
+
 4. Click **Deploy**. Every push to `main` redeploys automatically.
 
 5. Verify: open `https://<your-app>.vercel.app/api/health`
