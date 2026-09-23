@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { findUserByEmail } from "@/lib/db";
+import { credentialsOf, findUserByEmail, sanitizeUser, upgradeStoredPassword } from "@/lib/db";
 import { setSession, verifyPassword } from "@/lib/auth";
 import { friendly, statusOf } from "@/lib/http";
 
@@ -20,15 +20,27 @@ export async function POST(request) {
     }
 
     const user = await findUserByEmail(email);
+    const hash = credentialsOf(user);
+
     // Same message for "no such user" and "wrong password" (no account enumeration)
-    if (!user?.password_hash || !(await verifyPassword(password, user.password_hash))) {
+    if (!hash || !(await verifyPassword(password, hash))) {
       return NextResponse.json({ error: "Invalid email or password" }, { status: 401 });
     }
 
-    await setSession(user);
+    // If the migration SQL has since been run, move the hash into the column
+    upgradeStoredPassword(user);
+
+    // Mark Secure only when the request actually arrived over HTTPS
+    // (Vercel sets x-forwarded-proto; local `next start` is plain http)
+    const proto =
+      request.headers.get("x-forwarded-proto") ||
+      (request.nextUrl?.protocol === "https:" ? "https" : "http");
+
+    await setSession(user, { secure: proto === "https" });
+    const safe = sanitizeUser(user);
     return NextResponse.json({
       ok: true,
-      user: { id: user.id, name: user.name, email: user.email },
+      user: { id: safe.id, name: safe.name, email: safe.email },
     });
   } catch (err) {
     return NextResponse.json({ error: friendly(err) }, { status: statusOf(err) });

@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { authColumnReady, endpointInfo, listUsers } from "@/lib/db";
+import { authColumnReady, endpointInfo, listUsers, storageMode } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
 
@@ -7,13 +7,16 @@ export const dynamic = "force-dynamic";
 export async function GET() {
   try {
     const rows = await listUsers();
-    const authReady = await authColumnReady();
+    const hasColumn = await authColumnReady();
     return NextResponse.json({
       ok: true,
       ...endpointInfo(),
       rows: rows.length,
-      authReady,
-      ...(authReady ? {} : { note: "password_hash migration SQL not applied yet" }),
+      authReady: true,
+      passwordStorage: storageMode(hasColumn),
+      ...(hasColumn
+        ? {}
+        : { note: "passwords stored in packed-name mode; run migration SQL for a dedicated column" }),
     });
   } catch (err) {
     return NextResponse.json({ ok: false, error: err.message }, { status: 500 });

@@ -67,23 +67,54 @@ API:
 **How it works**
 
 - Passwords are hashed with **scrypt** (`scrypt$16384$salt$hex`) — never stored or
-  returned in plain text. `password_hash` is stripped from every API response.
+  returned in plain text. `password_hash` is stripped from every API response, and
+  a password packed into `name` is unpacked before responding.
 - Sessions are **persistent signed cookies** (30 days, `httpOnly`, `SameSite=Lax`,
   `Secure` in production). Each signature is keyed by the user's own password hash,
   so a token cannot be forged without knowing it, and changing the password
   invalidates existing sessions.
 - Login returns the same error for unknown email and wrong password.
 
-### Required database migration
+### How passwords are stored
 
-Run this **once** in your PostgreSQL client (pgAdmin, Docker, hosting panel):
+Two modes, chosen automatically:
+
+| Mode | When | Where the hash lives |
+| --- | --- | --- |
+| `column` | after the migration SQL below | real `password_hash` column (preferred) |
+| `packed-name` | no schema change available | appended to the `name` column after a `␟` separator |
+
+`GET /api/health` reports the active mode as `"passwordStorage"`.
+
+Because the exposed PostgREST endpoint has no password column yet, the app packs
+`displayName␟scrypt$…` into `name`. The API never returns it: `sanitizeUser()`
+strips `password_hash` **and** unpacks the display name from every response.
+The moment the migration SQL is run, existing packed accounts self-upgrade into
+the column on their next login.
+
+### Recommended database migration
+
+Run this **once** in your PostgreSQL client (pgAdmin, DBeaver, Docker, hosting panel).
+**Include the `COMMIT;`** — GUI clients such as DBeaver keep DDL in an open
+transaction until committed, which is why an earlier attempt silently did nothing:
 
 ```sql
 ALTER TABLE shajibbd ADD COLUMN IF NOT EXISTS password_hash text;
+COMMIT;
+
 NOTIFY pgrst, 'reload schema';   -- PostgREST < v10: restart the container instead
 ```
 
-`GET /api/health` reports `"authReady": true` once the column is visible.
+Verify:
+
+```sql
+SELECT column_name FROM information_schema.columns
+WHERE table_name = 'shajibbd' ORDER BY ordinal_position;
+```
+
+Expected: `id, name, email, password_hash, created_at` — and
+`https://api-central_db.shajibbd.online/shajibbd?select=password_hash` should
+return `200` instead of `400`.
 
 > Existing rows have no password, so those accounts cannot log in until a
 > password is set (e.g. `UPDATE shajibbd SET password_hash = 'scrypt$...' WHERE id = 1;`).
