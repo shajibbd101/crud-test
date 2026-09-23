@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { ApiError, createUser, listUsers } from "@/lib/db";
+import { createUser, listUsers } from "@/lib/db";
+import { friendly, statusOf } from "@/lib/http";
 
 export const dynamic = "force-dynamic";
 
@@ -9,8 +10,7 @@ export async function GET() {
     const rows = await listUsers();
     return NextResponse.json(rows);
   } catch (err) {
-    const status = err instanceof ApiError ? err.status : 500;
-    return NextResponse.json({ error: err.message }, { status });
+    return NextResponse.json({ error: friendly(err) }, { status: statusOf(err) });
   }
 }
 
@@ -33,7 +33,6 @@ export async function POST(request) {
     });
     return NextResponse.json(user, { status: 201 });
   } catch (err) {
-    const status = err instanceof ApiError ? err.status : 500;
-    return NextResponse.json({ error: err.message }, { status });
+    return NextResponse.json({ error: friendly(err) }, { status: statusOf(err) });
   }
 }

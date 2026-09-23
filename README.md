@@ -45,7 +45,53 @@ CREATE TABLE shajibbd (
 );
 ```
 
-## Run locally
+## Auth (login / registration)
+
+Pages:
+
+| Page           | URL           | Behaviour                                       |
+| -------------- | ------------- | ----------------------------------------------- |
+| Registration   | `/register`   | On success **auto-redirects to `/login`**       |
+| Login          | `/login`      | On success redirects to `/dashboard`            |
+| Dashboard      | `/dashboard`  | Shows "Welcome, {name}" + account info          |
+
+API:
+
+| Method | Endpoint             | Description                          |
+| ------ | -------------------- | ------------------------------------ |
+| POST   | `/api/auth/register` | Create account (name, email, password) |
+| POST   | `/api/auth/login`    | Verify credentials, set session cookie |
+| POST   | `/api/auth/logout`   | Clear session cookie                 |
+| GET    | `/api/auth/me`       | Current logged-in user (401 if none) |
+
+**How it works**
+
+- Passwords are hashed with **scrypt** (`scrypt$16384$salt$hex`) — never stored or
+  returned in plain text. `password_hash` is stripped from every API response.
+- Sessions are **persistent signed cookies** (30 days, `httpOnly`, `SameSite=Lax`,
+  `Secure` in production). Each signature is keyed by the user's own password hash,
+  so a token cannot be forged without knowing it, and changing the password
+  invalidates existing sessions.
+- Login returns the same error for unknown email and wrong password.
+
+### Required database migration
+
+Run this **once** in your PostgreSQL client (pgAdmin, Docker, hosting panel):
+
+```sql
+ALTER TABLE shajibbd ADD COLUMN IF NOT EXISTS password_hash text;
+NOTIFY pgrst, 'reload schema';   -- PostgREST < v10: restart the container instead
+```
+
+`GET /api/health` reports `"authReady": true` once the column is visible.
+
+> Existing rows have no password, so those accounts cannot log in until a
+> password is set (e.g. `UPDATE shajibbd SET password_hash = 'scrypt$...' WHERE id = 1;`).
+
+Optional: add `AUTH_SECRET` in Vercel (see `.env.example`) to sign session cookies
+with your own secret.
+
+
 
 ```bash
 npm install
@@ -80,6 +126,7 @@ Open http://localhost:3000
    | ------------- | ---------------------------------------- |
    | `API_BASE_URL`| `https://api-central_db.shajibbd.online` |
    | `API_TABLE`   | `shajibbd`                               |
+   | `AUTH_SECRET` | *random 64-char hex string* (optional but recommended) |
 
    > `https://` is optional — the app adds the scheme automatically if the value
    > was saved as a bare hostname.

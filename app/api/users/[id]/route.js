@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { ApiError, deleteUser, getUser, isValidId, updateUser } from "@/lib/db";
+import { deleteUser, getUser, isValidId, updateUser } from "@/lib/db";
+import { friendly, statusOf } from "@/lib/http";
 
 export const dynamic = "force-dynamic";
 
@@ -17,8 +18,7 @@ export async function GET(_request, { params }) {
   try {
     return NextResponse.json(await getUser(id));
   } catch (err) {
-    const status = err instanceof ApiError ? err.status : 500;
-    return NextResponse.json({ error: err.message }, { status });
+    return NextResponse.json({ error: friendly(err) }, { status: statusOf(err) });
   }
 }
 
@@ -44,8 +44,7 @@ export async function PUT(request, { params }) {
     });
     return NextResponse.json(user);
   } catch (err) {
-    const status = err instanceof ApiError ? err.status : 500;
-    return NextResponse.json({ error: err.message }, { status });
+    return NextResponse.json({ error: friendly(err) }, { status: statusOf(err) });
   }
 }
 
@@ -59,7 +58,6 @@ export async function DELETE(_request, { params }) {
     const user = await deleteUser(id);
     return NextResponse.json({ ok: true, id: user.id });
   } catch (err) {
-    const status = err instanceof ApiError ? err.status : 500;
-    return NextResponse.json({ error: err.message }, { status });
+    return NextResponse.json({ error: friendly(err) }, { status: statusOf(err) });
   }
 }
